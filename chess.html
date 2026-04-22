@@ -1,0 +1,1304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chess — 2 Player</title>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --light-sq: #F0D9B5;
+      --dark-sq:  #B58863;
+      --board-border: #8B6914;
+      --bg: #e8e4de;
+      --panel: rgba(255,255,255,0.55);
+      --card: rgba(255,255,255,0.35);
+      --accent: #7b5e3a;
+      --accent2: #c0392b;
+      --text: #2c2218;
+      --muted: #7a6a5a;
+      --sq: 72px;
+    }
+    * { margin:0; padding:0; box-sizing:border-box; }
+
+    body {
+      min-height: 100vh;
+      font-family: 'Inter', sans-serif;
+      color: var(--text);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      padding: 20px 10px;
+      overflow-x: hidden;
+      position: relative;
+    }
+
+    /* Marble background */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      z-index: -2;
+      background-color: #ddd8d0;
+      background-image:
+        repeating-linear-gradient(
+          112deg,
+          transparent,
+          transparent 40px,
+          rgba(255,255,255,0.08) 40px,
+          rgba(255,255,255,0.08) 41px
+        ),
+        repeating-linear-gradient(
+          -20deg,
+          transparent,
+          transparent 60px,
+          rgba(180,160,140,0.12) 60px,
+          rgba(180,160,140,0.12) 61px
+        );
+    }
+    body::after {
+      content: '';
+      position: fixed;
+      inset: 0;
+      z-index: -1;
+      background-image:
+        radial-gradient(ellipse at 15% 25%, rgba(255,255,255,0.55) 0%, transparent 55%),
+        radial-gradient(ellipse at 85% 75%, rgba(200,185,170,0.4) 0%, transparent 50%),
+        radial-gradient(ellipse at 60% 10%, rgba(255,252,248,0.6) 0%, transparent 40%),
+        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='600' height='600'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3CfeBlend in='SourceGraphic' mode='overlay' result='blend'/%3E%3CfeComposite in='blend' in2='SourceGraphic' operator='in'/%3E%3C/filter%3E%3Crect width='600' height='600' filter='url(%23n)' opacity='0.08'/%3E%3C/svg%3E");
+    }
+
+    /* Marble veins overlay using SVG */
+    #marble-veins {
+      position: fixed;
+      inset: 0;
+      z-index: -1;
+      pointer-events: none;
+      opacity: 0.18;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 18px;
+    }
+    header h1 {
+      font-family: 'Cinzel', serif;
+      font-size: 2rem;
+      font-weight: 700;
+      background: linear-gradient(135deg, #5a3e28, #9a7245, #c9a96e);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      letter-spacing: 3px;
+      text-shadow: none;
+      filter: drop-shadow(0 2px 6px rgba(90,60,30,0.18));
+    }
+    header p { color: var(--muted); font-size: .8rem; letter-spacing: 1px; margin-top: 2px; }
+
+    #game-layout {
+      display: flex;
+      gap: 18px;
+      align-items: flex-start;
+    }
+
+    /* ─── Player side panel ───────────── */
+    #left-panel {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      width: 220px;
+    }
+    .player-card {
+      background: rgba(255,255,255,0.52);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border-radius: 12px;
+      padding: 14px;
+      border: 1px solid rgba(255,255,255,0.75);
+      box-shadow: 0 4px 18px rgba(100,70,30,0.10);
+      transition: border-color .3s, box-shadow .3s;
+    }
+    .player-card.active-turn {
+      border-color: #9a7245;
+      box-shadow: 0 0 18px rgba(154,114,69,.22);
+    }
+    .player-card.in-check {
+      border-color: var(--accent2) !important;
+      box-shadow: 0 0 16px rgba(192,57,43,.25) !important;
+    }
+    .player-header { display:flex; align-items:center; gap:10px; margin-bottom:10px; }
+    .player-avatar {
+      width:36px; height:36px; border-radius:50%;
+      display:flex; align-items:center; justify-content:center;
+      font-size:1.2rem; font-weight:700;
+    }
+    .player-avatar.white-av { background: linear-gradient(135deg,#f5ede0,#e8d0b0); color:#5a3e22; border:1px solid rgba(180,140,80,.3); }
+    .player-avatar.black-av { background: linear-gradient(135deg,#3a2e26,#2a1e18); color:#c8b090; border:1px solid rgba(80,60,40,.5); }
+    .player-name { font-weight:600; font-size:.95rem; }
+    .player-side { font-size:.7rem; color:var(--muted); text-transform:uppercase; letter-spacing:1px; }
+    .timer {
+      font-family: 'Cinzel', serif;
+      font-size: 1.7rem;
+      font-weight: 700;
+      text-align: center;
+      padding: 8px 0;
+      border-radius: 8px;
+      background: rgba(255,255,255,0.4);
+      color: #3a2c1e;
+      transition: background .3s, color .3s;
+      letter-spacing: 2px;
+      border: 1px solid rgba(200,170,120,0.3);
+    }
+    .timer.active { background: rgba(154,114,69,.15); color: #6b4820; }
+    .timer.low { background: rgba(192,57,43,.13); color: var(--accent2); animation: pulse-timer 1s infinite; }
+    @keyframes pulse-timer { 0%,100%{opacity:1} 50%{opacity:.7} }
+    .captured-label { font-size:.65rem; color:var(--muted); text-transform:uppercase; letter-spacing:1px; margin-bottom:5px; }
+    .captured-pieces { display:flex; flex-wrap:wrap; gap:2px; min-height:26px; }
+    .cap-piece { width:22px; height:22px; display:inline-flex; align-items:center; justify-content:center; }
+    .cap-piece svg { width:20px; height:20px; }
+    .score-diff { font-size:.75rem; color:var(--accent); font-weight:600; margin-left:4px; }
+
+    /* ─── Board wrapper ─────────────────── */
+    #board-wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0;
+    }
+    #board-outer {
+      border: 6px solid var(--board-border);
+      border-radius: 4px;
+      box-shadow:
+        0 0 0 1px #6a4f10,
+        0 20px 60px rgba(0,0,0,.7),
+        inset 0 0 0 1px rgba(255,220,100,.1);
+      position: relative;
+    }
+    #board {
+      display: grid;
+      grid-template-columns: repeat(8, var(--sq));
+      grid-template-rows: repeat(8, var(--sq));
+      user-select: none;
+    }
+    .square {
+      width: var(--sq); height: var(--sq);
+      display: flex; align-items: center; justify-content: center;
+      position: relative; cursor: pointer;
+      transition: filter .1s;
+    }
+    .square.light { background: var(--light-sq); }
+    .square.dark  { background: var(--dark-sq); }
+    .square.selected { background: #aee35a !important; }
+    .square.last-move { background: rgba(205,210,106,.6) !important; }
+    .square.in-check-sq { background: rgba(220,50,50,.7) !important; }
+    .coord-file, .coord-rank {
+      position: absolute;
+      font-size: 11px;
+      font-weight: 600;
+      font-family: 'Inter', sans-serif;
+      pointer-events: none;
+      line-height: 1;
+      z-index: 1;
+    }
+    .square.light .coord-file, .square.light .coord-rank { color: var(--dark-sq); }
+    .square.dark  .coord-file, .square.dark  .coord-rank { color: var(--light-sq); }
+    .coord-file { bottom:2px; right:4px; }
+    .coord-rank { top:2px; left:3px; }
+    .legal-dot {
+      position: absolute;
+      width: 28px; height: 28px;
+      border-radius: 50%;
+      background: rgba(0,0,0,.2);
+      pointer-events: none;
+      z-index: 2;
+    }
+    .legal-cap-ring {
+      position: absolute;
+      inset: 0;
+      border-radius: 0;
+      border: 5px solid rgba(0,0,0,.25);
+      pointer-events: none;
+      z-index: 2;
+    }
+    .piece-wrap {
+      width: var(--sq); height: var(--sq);
+      display: flex; align-items: center; justify-content: center;
+      position: absolute;
+      z-index: 3;
+      transition: transform .12s ease;
+      pointer-events: none;
+    }
+    .piece-wrap svg { width:64px; height:64px; }
+    .square:hover .piece-wrap { transform: scale(1.06); }
+    .square.selected .piece-wrap { transform: scale(1.1); }
+
+    /* ─── Right panel ─────────────────── */
+    #right-panel {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      width: 220px;
+    }
+    .panel-card {
+      background: rgba(255,255,255,0.52);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border-radius: 12px;
+      padding: 14px;
+      border: 1px solid rgba(255,255,255,0.75);
+      box-shadow: 0 4px 18px rgba(100,70,30,0.10);
+    }
+    .panel-title {
+      font-family: 'Cinzel', serif;
+      font-size: .8rem;
+      color: #7b5e3a;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      margin-bottom: 10px;
+    }
+    #move-list {
+      height: 300px;
+      overflow-y: auto;
+      font-size: .8rem;
+    }
+    #move-list::-webkit-scrollbar { width:4px; }
+    #move-list::-webkit-scrollbar-track { background: transparent; }
+    #move-list::-webkit-scrollbar-thumb { background: #333; border-radius:2px; }
+    .move-row {
+      display: grid;
+      grid-template-columns: 28px 1fr 1fr;
+      gap: 4px;
+      padding: 3px 4px;
+      border-radius: 4px;
+    }
+    .move-row:hover { background: rgba(154,114,69,.08); }
+    .move-row:last-child { background: rgba(154,114,69,.15); }
+    .move-num { color: var(--muted); font-weight:500; }
+    .move-san { padding: 2px 4px; border-radius:3px; cursor:default; }
+    .move-san:hover { background: rgba(255,255,255,.1); }
+
+    #status-box {
+      text-align: center;
+      font-size: .85rem;
+      color: var(--muted);
+      padding: 8px;
+      border-radius:8px;
+      background: rgba(255,255,255,0.35);
+      border: 1px solid rgba(200,170,120,0.25);
+    }
+    #status-box .status-main { font-weight:600; color:var(--text); font-size:.95rem; }
+    #status-box .status-sub  { margin-top:3px; font-size:.75rem; }
+
+    .btn {
+      display: block; width:100%;
+      padding: 9px 14px;
+      border: none; border-radius:8px;
+      cursor: pointer;
+      font-family: 'Inter', sans-serif;
+      font-size: .85rem;
+      font-weight: 600;
+      letter-spacing:.5px;
+      transition: opacity .2s, transform .1s;
+    }
+    .btn:hover { opacity:.9; transform:translateY(-1px); }
+    .btn:active { transform:translateY(0); }
+    .btn-primary { background: linear-gradient(135deg, #9a7245, #7b5230); color:#fff; box-shadow: 0 2px 8px rgba(100,60,20,.2); }
+    .btn-secondary { background: rgba(255,255,255,0.5); color:var(--text); border:1px solid rgba(180,140,80,.3); }
+    .btn-danger { background: linear-gradient(135deg, #c0392b, #962d22); color:#fff; }
+
+    /* ─── Modals ─────────────────────── */
+    .modal-overlay {
+      position: fixed; inset:0;
+      background: rgba(0,0,0,.75);
+      display: none; align-items:center; justify-content:center;
+      z-index: 100;
+      backdrop-filter: blur(6px);
+    }
+    .modal-overlay.open { display:flex; }
+    .modal-box {
+      background: rgba(250,246,240,0.92);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-radius: 16px;
+      padding: 32px 28px;
+      text-align: center;
+      max-width: 400px; width:90%;
+      border: 1px solid rgba(255,255,255,0.85);
+      box-shadow: 0 30px 80px rgba(100,70,30,.25), 0 2px 0 rgba(255,255,255,.8) inset;
+    }
+    .modal-box h2 { color: #3a2510; }
+    .modal-box p  { color: #7a6040; }
+    .modal-box h2 { font-family:'Cinzel',serif; font-size:1.5rem; margin-bottom:8px; }
+    .modal-box p  { color:var(--muted); margin-bottom:20px; font-size:.9rem; }
+    .promo-pieces { display:flex; gap:12px; justify-content:center; margin:16px 0; }
+    .promo-btn {
+      width:70px; height:70px;
+      background: rgba(255,255,255,0.6);
+      border:2px solid rgba(180,140,80,0.3);
+      border-radius:12px;
+      cursor:pointer;
+      display:flex; align-items:center; justify-content:center;
+      transition: border-color .2s, transform .15s, box-shadow .2s;
+    }
+    .promo-btn:hover { border-color:#9a7245; transform:scale(1.07); box-shadow:0 4px 12px rgba(100,60,20,.2); }
+    .promo-btn svg { width:56px; height:56px; }
+    .game-result-icon { font-size:3rem; margin-bottom:10px; }
+    #modal-buttons { display:flex; gap:10px; justify-content:center; flex-wrap:wrap; }
+    #modal-buttons .btn { width:auto; min-width:120px; }
+
+    /* ─── Responsive ─────────────── */
+    @media (max-width:900px) {
+      :root { --sq: 52px; }
+      #game-layout { flex-direction: column; align-items:center; gap:12px; }
+      #left-panel, #right-panel { width:100%; max-width:576px; flex-direction:row; flex-wrap:wrap; }
+      .player-card, .panel-card { flex:1; min-width:160px; }
+      #move-list { height:160px; }
+    }
+    @media (max-width:480px) {
+      :root { --sq: 42px; }
+      .piece-wrap svg { width:38px; height:38px; }
+      header h1 { font-size:1.4rem; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- Marble vein overlay -->
+<svg id="marble-veins" viewBox="0 0 1440 900" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
+  <filter id="blur-vein"><feGaussianBlur stdDeviation="3"/></filter>
+  <g filter="url(#blur-vein)" stroke-linecap="round">
+    <path d="M-20,180 Q200,120 380,220 T700,180 T1000,240 T1460,160" fill="none" stroke="#c8b090" stroke-width="2.5"/>
+    <path d="M-20,320 Q150,280 300,350 T600,300 T900,370 T1460,290" fill="none" stroke="#b8a070" stroke-width="1.5"/>
+    <path d="M200,0 Q280,200 260,400 T300,700 T220,920" fill="none" stroke="#c0a878" stroke-width="2"/>
+    <path d="M600,0 Q650,150 580,380 T620,620 T560,920" fill="none" stroke="#b8a070" stroke-width="1.2"/>
+    <path d="M1000,0 Q1060,200 1020,450 T1080,750 T1000,920" fill="none" stroke="#c8b090" stroke-width="2.2"/>
+    <path d="M-20,600 Q300,540 500,610 T900,570 T1200,630 T1460,580" fill="none" stroke="#b09060" stroke-width="1.8"/>
+    <path d="M-20,750 Q250,700 450,780 T800,730 T1460,760" fill="none" stroke="#c8b090" stroke-width="1.2"/>
+    <path d="M800,0 Q820,300 780,500 T840,800 T800,920" fill="none" stroke="#a89060" stroke-width="1"/>
+    <path d="M1300,0 Q1330,180 1280,400 T1340,700 T1300,920" fill="none" stroke="#c0a878" stroke-width="1.5"/>
+    <path d="M-20,460 Q400,410 650,490 T1100,430 T1460,470" fill="none" stroke="#b09868" stroke-width="1"/>
+  </g>
+</svg>
+
+<header>
+  <h1>CHESS</h1>
+  <p>2 Player Local Game</p>
+</header>
+
+<div id="game-layout">
+
+  <!-- Left panel -->
+  <div id="left-panel">
+    <div class="player-card" id="card-black">
+      <div class="player-header">
+        <div class="player-avatar black-av">♞</div>
+        <div>
+          <div class="player-name">Player 2</div>
+          <div class="player-side">Black</div>
+        </div>
+      </div>
+      <div class="timer" id="timer-black">10:00</div>
+      <div style="margin-top:10px">
+        <div class="captured-label">Captured <span class="score-diff" id="score-black"></span></div>
+        <div class="captured-pieces" id="cap-black"></div>
+      </div>
+    </div>
+
+    <div class="panel-card">
+      <div class="panel-title">Status</div>
+      <div id="status-box">
+        <div class="status-main" id="status-main">White's Turn</div>
+        <div class="status-sub"  id="status-sub">Game in progress</div>
+      </div>
+    </div>
+
+    <div class="player-card" id="card-white">
+      <div class="player-header">
+        <div class="player-avatar white-av">♙</div>
+        <div>
+          <div class="player-name">Player 1</div>
+          <div class="player-side">White</div>
+        </div>
+      </div>
+      <div class="timer" id="timer-white">10:00</div>
+      <div style="margin-top:10px">
+        <div class="captured-label">Captured <span class="score-diff" id="score-white"></span></div>
+        <div class="captured-pieces" id="cap-white"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Board -->
+  <div id="board-wrap">
+    <div id="board-outer">
+      <div id="board"></div>
+    </div>
+  </div>
+
+  <!-- Right panel -->
+  <div id="right-panel">
+    <div class="panel-card">
+      <div class="panel-title">Move History</div>
+      <div id="move-list"></div>
+    </div>
+    <div class="panel-card" style="display:flex;flex-direction:column;gap:8px;">
+      <div class="panel-title">Controls</div>
+      <button class="btn btn-primary" onclick="newGame()">New Game</button>
+      <button class="btn btn-secondary" onclick="flipBoard()">Flip Board</button>
+      <button class="btn btn-secondary" onclick="offerDraw()">Offer Draw</button>
+      <button class="btn btn-danger" onclick="resignGame()">Resign</button>
+    </div>
+    <div class="panel-card">
+      <div class="panel-title">Time Control</div>
+      <select id="time-select" style="width:100%;padding:8px;background:rgba(255,255,255,0.6);color:var(--text);border:1px solid rgba(180,140,80,.3);border-radius:6px;font-family:inherit;font-size:.85rem;">
+        <option value="600">10 min</option>
+        <option value="300">5 min</option>
+        <option value="180">3 min</option>
+        <option value="60">1 min (Bullet)</option>
+        <option value="0">No timer</option>
+      </select>
+    </div>
+  </div>
+
+</div>
+
+<!-- Promotion modal -->
+<div class="modal-overlay" id="promo-modal">
+  <div class="modal-box">
+    <h2>Pawn Promotion</h2>
+    <p>Choose a piece to promote your pawn</p>
+    <div class="promo-pieces" id="promo-choices"></div>
+  </div>
+</div>
+
+<!-- Game over modal -->
+<div class="modal-overlay" id="gameover-modal">
+  <div class="modal-box">
+    <div class="game-result-icon" id="result-icon">♔</div>
+    <h2 id="result-title">Game Over</h2>
+    <p id="result-desc">...</p>
+    <div id="modal-buttons">
+      <button class="btn btn-primary" onclick="newGame()">Play Again</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ════════════════════════════════════════════════════════
+//  SVG PIECE DEFINITIONS
+// ════════════════════════════════════════════════════════
+const PIECES_SVG = {
+  // White pieces
+  'wK': `<svg viewBox="0 0 45 45" xmlns="http://www.w3.org/2000/svg">
+    <g fill="none" stroke="#000" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M22.5 11.63V6" stroke-width="1.5" stroke-linejoin="miter"/>
+      <path d="M20 8h5" stroke-width="1.5" stroke-linejoin="miter"/>
+      <path d="M22.5 25s4.5-7.5 3-10.5c0 0-1-2.5-3-2.5s-3 2.5-3 2.5c-1.5 3 3 10.5 3 10.5" fill="#fff"/>
+      <path d="M11.5 37c5.5 3.5 15.5 3.5 21 0v-7s9-4.5 6-10.5c-4-6.5-13.5-3.5-16 4V17s-3.5-7.5-13-5c-7.5 2.5-2 11.5 7 10z" fill="#fff"/>
+      <path d="M11.5 30c5.5-3 15.5-3 21 0" stroke="#000"/>
+      <path d="M11.5 33.5c5.5-3 15.5-3 21 0" stroke="#000"/>
+      <path d="M11.5 37c5.5-3 15.5-3 21 0" stroke="#000"/>
+    </g>
+  </svg>`,
+
+  'wQ': `<svg viewBox="0 0 45 45" xmlns="http://www.w3.org/2000/svg">
+    <g fill="#fff" stroke="#000" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="6"   cy="12" r="2.75"/>
+      <circle cx="14"  cy="9"  r="2.75"/>
+      <circle cx="22.5"cy="8"  r="2.75"/>
+      <circle cx="31"  cy="9"  r="2.75"/>
+      <circle cx="39"  cy="12" r="2.75"/>
+      <path d="M9 26c8.5-8.5 15.5-8.5 27 0l2.5-12.5L31 25l-.3-14.1-8.2 13.8-8.2-13.8L14 25 6.5 13.5z" fill="#fff"/>
+      <path d="M9 26c0 2 1.5 2 2.5 4 1 1.5 1 1 .5 3.5-1.5 1-1 2.5-1 2.5-1.5 1.5.5 2.5.5 2.5 6.5 1 16.5 1 23 0 0 0 1.5-1 0-2.5 0 0 .5-1.5-1-2.5-.5-2.5-.5-2 .5-3.5 1-2 2.5-2 2.5-4-8.5-1.5-18.5-1.5-27 0z" fill="#fff"/>
+      <path d="M11.5 30c3.5-1 18.5-1 22 0" fill="none" stroke="#000" stroke-width="1"/>
+      <path d="M12 33.5c4-1.5 17-1.5 21 0" fill="none" stroke="#000" stroke-width="1"/>
+      <path d="M11 38c4-1.5 19-1.5 23 0" fill="none" stroke="#000" stroke-width=".8"/>
+    </g>
+  </svg>`,
+
+  'wR': `<svg viewBox="0 0 45 45" xmlns="http://www.w3.org/2000/svg">
+    <g fill="#fff" stroke="#000" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M9 39h27v-3H9z"/>
+      <path d="M12 36v-4h21v4H12z"/>
+      <path d="M11 14V9h4v2h5V9h5v2h5V9h4v5" stroke-linejoin="miter"/>
+      <path d="M34 14l-3 3H14l-3-3"/>
+      <path d="M31 17v12.5H14V17"/>
+      <path d="M31 29.5l1.5 2.5h-20l1.5-2.5"/>
+      <path d="M11 14h23" stroke-linejoin="miter" fill="none"/>
+    </g>
+  </svg>`,
+
+  'wB': `<svg viewBox="0 0 45 45" xmlns="http://www.w3.org/2000/svg">
+    <g fill="none" stroke="#000" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <g fill="#fff">
+        <circle cx="22.5" cy="10" r="4"/>
+        <path d="M22.5 14c3.5 0 11 13.5 8.5 18.5C28 39 17 39 14 32.5 11.5 27.5 19 14 22.5 14z"/>
+        <path d="M15 32c2.5 2.5 12.5 2.5 15 0M10 38h25"/>
+        <path d="M10 38c0-3 2-5 5-5h20c3 0 5 2 5 5H10z"/>
+      </g>
+      <path d="M22.5 9.5c0 .5-.5 1-1 1.5" stroke-width="1" fill="none"/>
+      <path d="M20 13.5 C18 17 17 21 17 25" stroke-width=".5" fill="none" stroke-dasharray="2,2" stroke-opacity=".4"/>
+    </g>
+  </svg>`,
+
+  'wN': `<svg viewBox="0 0 45 45" xmlns="http://www.w3.org/2000/svg">
+    <g fill="none" stroke="#000" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M22 10c10.5 1 16.5 8 16 29H15c0-9 10-6.5 8-21" fill="#fff"/>
+      <path d="M24 18c.38 5.12-.38 8.88-2 11" fill="none" stroke-width="1"/>
+      <path d="M9.5 25.5a.5.5 0 1 1-1 0 .5.5 0 1 1 1 0z" fill="#000" stroke="none"/>
+      <path d="M14.933 15.75c-.668 1.946-.668 4.806 0 6.5 1.944 5 9 6.5 8 10l-2.5 4.5c2.5-.5 5 .5 5 2h4c0-3-3-4.5-5-6 3.5-4.5 4-7.5 4-13.5-.5-5-3-7-5-7" fill="#fff"/>
+      <path d="M9.5 25.5c0 2 1.5 3 3 4l-3 2.5" fill="#fff"/>
+      <path d="M10 36h6l1-3H11z" fill="#fff"/>
+      <path d="M9 39h28v-2H9z" fill="#fff"/>
+    </g>
+  </svg>`,
+
+  'wP': `<svg viewBox="0 0 45 45" xmlns="http://www.w3.org/2000/svg">
+    <g fill="#fff" stroke="#000" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M22.5 9c-2.21 0-4 1.79-4 4 0 .89.29 1.71.78 2.38C17.33 16.5 16 18.59 16 21c0 2.03.94 3.84 2.41 5.03L17 34h11l-1.41-7.97C28.06 24.84 29 23.03 29 21c0-2.41-1.33-4.5-3.28-5.62.49-.67.78-1.49.78-2.38 0-2.21-1.79-4-4-4z"/>
+      <path d="M14.5 34h16v3H14.5z"/>
+      <path d="M13 37h19v2H13z"/>
+    </g>
+  </svg>`,
+
+  // Black pieces
+  'bK': `<svg viewBox="0 0 45 45" xmlns="http://www.w3.org/2000/svg">
+    <g fill="none" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M22.5 11.63V6M20 8h5" stroke="#fff" stroke-width="1.5" stroke-linejoin="miter"/>
+      <path d="M22.5 25s4.5-7.5 3-10.5c0 0-1-2.5-3-2.5s-3 2.5-3 2.5c-1.5 3 3 10.5 3 10.5" fill="#333"/>
+      <path d="M11.5 37c5.5 3.5 15.5 3.5 21 0v-7s9-4.5 6-10.5c-4-6.5-13.5-3.5-16 4V17s-3.5-7.5-13-5c-7.5 2.5-2 11.5 7 10z" fill="#333"/>
+      <path d="M11.5 30c5.5-3 15.5-3 21 0" stroke="#fff" stroke-width=".8"/>
+      <path d="M11.5 33.5c5.5-3 15.5-3 21 0" stroke="#fff" stroke-width=".8"/>
+      <path d="M11.5 37c5.5-3 15.5-3 21 0" stroke="#fff" stroke-width=".8"/>
+      <path d="M11.5 37c5.5 3.5 15.5 3.5 21 0v-7s9-4.5 6-10.5c-4-6.5-13.5-3.5-16 4V17s-3.5-7.5-13-5c-7.5 2.5-2 11.5 7 10z" fill="none" stroke="#fff"/>
+    </g>
+  </svg>`,
+
+  'bQ': `<svg viewBox="0 0 45 45" xmlns="http://www.w3.org/2000/svg">
+    <g stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="6"   cy="12" r="2.75" fill="#333"/>
+      <circle cx="14"  cy="9"  r="2.75" fill="#333"/>
+      <circle cx="22.5"cy="8"  r="2.75" fill="#333"/>
+      <circle cx="31"  cy="9"  r="2.75" fill="#333"/>
+      <circle cx="39"  cy="12" r="2.75" fill="#333"/>
+      <path d="M9 26c8.5-8.5 15.5-8.5 27 0l2.5-12.5L31 25l-.3-14.1-8.2 13.8-8.2-13.8L14 25 6.5 13.5z" fill="#333"/>
+      <path d="M9 26c0 2 1.5 2 2.5 4 1 1.5 1 1 .5 3.5-1.5 1-1 2.5-1 2.5-1.5 1.5.5 2.5.5 2.5 6.5 1 16.5 1 23 0 0 0 1.5-1 0-2.5 0 0 .5-1.5-1-2.5-.5-2.5-.5-2 .5-3.5 1-2 2.5-2 2.5-4-8.5-1.5-18.5-1.5-27 0z" fill="#333"/>
+      <path d="M11.5 30c3.5-1 18.5-1 22 0" fill="none" stroke="#fff" stroke-width=".8"/>
+      <path d="M12 33.5c4-1.5 17-1.5 21 0" fill="none" stroke="#fff" stroke-width=".8"/>
+      <path d="M11 38c4-1.5 19-1.5 23 0" fill="none" stroke="#fff" stroke-width=".6"/>
+    </g>
+  </svg>`,
+
+  'bR': `<svg viewBox="0 0 45 45" xmlns="http://www.w3.org/2000/svg">
+    <g fill="#333" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M9 39h27v-3H9z"/>
+      <path d="M12 36v-4h21v4H12z"/>
+      <path d="M11 14V9h4v2h5V9h5v2h5V9h4v5" stroke-linejoin="miter"/>
+      <path d="M34 14l-3 3H14l-3-3"/>
+      <path d="M31 17v12.5H14V17"/>
+      <path d="M31 29.5l1.5 2.5h-20l1.5-2.5"/>
+      <path d="M11 14h23" stroke-linejoin="miter" fill="none"/>
+    </g>
+  </svg>`,
+
+  'bB': `<svg viewBox="0 0 45 45" xmlns="http://www.w3.org/2000/svg">
+    <g fill="none" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <g fill="#333">
+        <circle cx="22.5" cy="10" r="4"/>
+        <path d="M22.5 14c3.5 0 11 13.5 8.5 18.5C28 39 17 39 14 32.5 11.5 27.5 19 14 22.5 14z"/>
+        <path d="M10 38h25"/>
+        <path d="M10 38c0-3 2-5 5-5h20c3 0 5 2 5 5H10z"/>
+      </g>
+    </g>
+  </svg>`,
+
+  'bN': `<svg viewBox="0 0 45 45" xmlns="http://www.w3.org/2000/svg">
+    <g fill="none" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M22 10c10.5 1 16.5 8 16 29H15c0-9 10-6.5 8-21" fill="#333"/>
+      <path d="M9.5 25.5a.5.5 0 1 1-1 0 .5.5 0 1 1 1 0z" fill="#fff" stroke="none"/>
+      <path d="M14.933 15.75c-.668 1.946-.668 4.806 0 6.5 1.944 5 9 6.5 8 10l-2.5 4.5c2.5-.5 5 .5 5 2h4c0-3-3-4.5-5-6 3.5-4.5 4-7.5 4-13.5-.5-5-3-7-5-7" fill="#333"/>
+      <path d="M9.5 25.5c0 2 1.5 3 3 4l-3 2.5" fill="#333"/>
+      <path d="M10 36h6l1-3H11z" fill="#333"/>
+      <path d="M9 39h28v-2H9z" fill="#333"/>
+    </g>
+  </svg>`,
+
+  'bP': `<svg viewBox="0 0 45 45" xmlns="http://www.w3.org/2000/svg">
+    <g fill="#333" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M22.5 9c-2.21 0-4 1.79-4 4 0 .89.29 1.71.78 2.38C17.33 16.5 16 18.59 16 21c0 2.03.94 3.84 2.41 5.03L17 34h11l-1.41-7.97C28.06 24.84 29 23.03 29 21c0-2.41-1.33-4.5-3.28-5.62.49-.67.78-1.49.78-2.38 0-2.21-1.79-4-4-4z"/>
+      <path d="M14.5 34h16v3H14.5z"/>
+      <path d="M13 37h19v2H13z"/>
+    </g>
+  </svg>`,
+};
+
+// ════════════════════════════════════════════════════════
+//  CHESS ENGINE
+// ════════════════════════════════════════════════════════
+const W = 'w', B = 'b';
+
+function initBoard() {
+  const b = [];
+  const backRow = ['R','N','B','Q','K','B','N','R'];
+  for (let r = 0; r < 8; r++) {
+    b[r] = [];
+    for (let c = 0; c < 8; c++) {
+      if (r === 0) b[r][c] = { color: B, type: backRow[c] };
+      else if (r === 1) b[r][c] = { color: B, type: 'P' };
+      else if (r === 6) b[r][c] = { color: W, type: 'P' };
+      else if (r === 7) b[r][c] = { color: W, type: backRow[c] };
+      else b[r][c] = null;
+    }
+  }
+  return b;
+}
+
+function cloneBoard(b) {
+  return b.map(row => row.map(sq => sq ? { ...sq } : null));
+}
+
+function inBounds(r, c) { return r >= 0 && r < 8 && c >= 0 && c < 8; }
+
+function isEnemy(board, r, c, color) {
+  return inBounds(r, c) && board[r][c] && board[r][c].color !== color;
+}
+
+function isEmpty(board, r, c) {
+  return inBounds(r, c) && !board[r][c];
+}
+
+function pieceMoves(board, r, c, enPassant, castlingRights) {
+  const piece = board[r][c];
+  if (!piece) return [];
+  const { color, type } = piece;
+  const moves = [];
+  const dir = color === W ? -1 : 1;
+
+  if (type === 'P') {
+    if (isEmpty(board, r + dir, c)) {
+      moves.push({ r: r + dir, c });
+      const startRow = color === W ? 6 : 1;
+      if (r === startRow && isEmpty(board, r + 2 * dir, c)) {
+        moves.push({ r: r + 2 * dir, c, twoStep: true });
+      }
+    }
+    for (const dc of [-1, 1]) {
+      if (isEnemy(board, r + dir, c + dc, color)) {
+        moves.push({ r: r + dir, c: c + dc });
+      }
+      if (enPassant && enPassant.r === r + dir && enPassant.c === c + dc) {
+        moves.push({ r: r + dir, c: c + dc, enPassant: true });
+      }
+    }
+  }
+
+  else if (type === 'N') {
+    for (const [dr, dc] of [[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]]) {
+      const nr = r + dr, nc = c + dc;
+      if (inBounds(nr, nc) && (!board[nr][nc] || board[nr][nc].color !== color)) {
+        moves.push({ r: nr, c: nc });
+      }
+    }
+  }
+
+  else if (type === 'B') {
+    for (const [dr, dc] of [[-1,-1],[-1,1],[1,-1],[1,1]]) {
+      let nr = r + dr, nc = c + dc;
+      while (inBounds(nr, nc)) {
+        if (!board[nr][nc]) { moves.push({ r: nr, c: nc }); }
+        else { if (board[nr][nc].color !== color) moves.push({ r: nr, c: nc }); break; }
+        nr += dr; nc += dc;
+      }
+    }
+  }
+
+  else if (type === 'R') {
+    for (const [dr, dc] of [[-1,0],[1,0],[0,-1],[0,1]]) {
+      let nr = r + dr, nc = c + dc;
+      while (inBounds(nr, nc)) {
+        if (!board[nr][nc]) { moves.push({ r: nr, c: nc }); }
+        else { if (board[nr][nc].color !== color) moves.push({ r: nr, c: nc }); break; }
+        nr += dr; nc += dc;
+      }
+    }
+  }
+
+  else if (type === 'Q') {
+    for (const [dr, dc] of [[-1,-1],[-1,1],[1,-1],[1,1],[-1,0],[1,0],[0,-1],[0,1]]) {
+      let nr = r + dr, nc = c + dc;
+      while (inBounds(nr, nc)) {
+        if (!board[nr][nc]) { moves.push({ r: nr, c: nc }); }
+        else { if (board[nr][nc].color !== color) moves.push({ r: nr, c: nc }); break; }
+        nr += dr; nc += dc;
+      }
+    }
+  }
+
+  else if (type === 'K') {
+    for (const [dr, dc] of [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]]) {
+      const nr = r + dr, nc = c + dc;
+      if (inBounds(nr, nc) && (!board[nr][nc] || board[nr][nc].color !== color)) {
+        moves.push({ r: nr, c: nc });
+      }
+    }
+    // Castling
+    if (castlingRights) {
+      const row = color === W ? 7 : 0;
+      if (r === row && c === 4) {
+        if (castlingRights[color + 'K'] && !board[row][5] && !board[row][6] &&
+            board[row][7]?.type === 'R' && board[row][7]?.color === color) {
+          if (!isSquareAttacked(board, row, 4, color) &&
+              !isSquareAttacked(board, row, 5, color) &&
+              !isSquareAttacked(board, row, 6, color)) {
+            moves.push({ r: row, c: 6, castle: 'K' });
+          }
+        }
+        if (castlingRights[color + 'Q'] && !board[row][3] && !board[row][2] && !board[row][1] &&
+            board[row][0]?.type === 'R' && board[row][0]?.color === color) {
+          if (!isSquareAttacked(board, row, 4, color) &&
+              !isSquareAttacked(board, row, 3, color) &&
+              !isSquareAttacked(board, row, 2, color)) {
+            moves.push({ r: row, c: 2, castle: 'Q' });
+          }
+        }
+      }
+    }
+  }
+
+  return moves;
+}
+
+function isSquareAttacked(board, r, c, byOpponent) {
+  // byOpponent = color of pieces that might attack this square
+  const attackColor = byOpponent === W ? B : W;
+  // Check all opponent pieces
+  for (let rr = 0; rr < 8; rr++) {
+    for (let cc = 0; cc < 8; cc++) {
+      const p = board[rr][cc];
+      if (p && p.color === attackColor) {
+        const rawMoves = pieceMoves(board, rr, cc, null, null);
+        if (rawMoves.some(m => m.r === r && m.c === c)) return true;
+      }
+    }
+  }
+  return false;
+}
+
+function isInCheck(board, color) {
+  for (let r = 0; r < 8; r++) {
+    for (let c = 0; c < 8; c++) {
+      if (board[r][c]?.color === color && board[r][c]?.type === 'K') {
+        return isSquareAttacked(board, r, c, color);
+      }
+    }
+  }
+  return false;
+}
+
+function applyMove(board, from, to, promo) {
+  const nb = cloneBoard(board);
+  const piece = { ...nb[from.r][from.c] };
+  nb[to.r][to.c] = piece;
+  nb[from.r][from.c] = null;
+
+  if (to.enPassant) {
+    const dir = piece.color === W ? 1 : -1;
+    nb[to.r + dir][to.c] = null;
+  }
+  if (to.castle) {
+    const row = piece.color === W ? 7 : 0;
+    if (to.castle === 'K') {
+      nb[row][5] = { ...nb[row][7] };
+      nb[row][7] = null;
+    } else {
+      nb[row][3] = { ...nb[row][0] };
+      nb[row][0] = null;
+    }
+  }
+  if (piece.type === 'P' && promo) {
+    nb[to.r][to.c].type = promo;
+  }
+  return nb;
+}
+
+function getLegalMoves(board, r, c, enPassant, castlingRights) {
+  const piece = board[r][c];
+  if (!piece) return [];
+  const raw = pieceMoves(board, r, c, enPassant, castlingRights);
+  return raw.filter(to => {
+    const nb = applyMove(board, { r, c }, to);
+    return !isInCheck(nb, piece.color);
+  });
+}
+
+function getAllLegalMoves(board, color, enPassant, castlingRights) {
+  const moves = [];
+  for (let r = 0; r < 8; r++) {
+    for (let c = 0; c < 8; c++) {
+      if (board[r][c]?.color === color) {
+        const legal = getLegalMoves(board, r, c, enPassant, castlingRights);
+        legal.forEach(to => moves.push({ from: { r, c }, to }));
+      }
+    }
+  }
+  return moves;
+}
+
+function updateCastlingRights(rights, board, from, piece, captured) {
+  const r = { ...rights };
+  if (piece.type === 'K') { r[piece.color + 'K'] = false; r[piece.color + 'Q'] = false; }
+  if (piece.type === 'R') {
+    if (from.r === 7 && from.c === 7) r.wK = false;
+    if (from.r === 7 && from.c === 0) r.wQ = false;
+    if (from.r === 0 && from.c === 7) r.bK = false;
+    if (from.r === 0 && from.c === 0) r.bQ = false;
+  }
+  return r;
+}
+
+const PIECE_VALUE = { P: 1, N: 3, B: 3, R: 5, Q: 9, K: 0 };
+
+function toAlgebraic(board, from, to, promo, isCheck, isMate, castlingRights, enPassant) {
+  const piece = board[from.r][from.c];
+  if (!piece) return '?';
+
+  if (to.castle === 'K') return isMate ? 'O-O#' : isCheck ? 'O-O+' : 'O-O';
+  if (to.castle === 'Q') return isMate ? 'O-O-O#' : isCheck ? 'O-O-O+' : 'O-O-O';
+
+  const files = 'abcdefgh';
+  const toFile = files[to.c];
+  const toRank = (8 - to.r).toString();
+  const fromFile = files[from.c];
+  const isCapture = board[to.r][to.c] !== null || to.enPassant;
+  let san = '';
+
+  if (piece.type === 'P') {
+    if (isCapture) san = fromFile + 'x';
+    san += toFile + toRank;
+    if (promo) san += '=' + promo;
+  } else {
+    san = piece.type;
+    // Disambiguation
+    const ambig = [];
+    for (let r = 0; r < 8; r++) {
+      for (let c = 0; c < 8; c++) {
+        if (r === from.r && c === from.c) continue;
+        if (board[r][c]?.type === piece.type && board[r][c]?.color === piece.color) {
+          const m = getLegalMoves(board, r, c, enPassant, castlingRights);
+          if (m.some(mv => mv.r === to.r && mv.c === to.c)) ambig.push({ r, c });
+        }
+      }
+    }
+    if (ambig.length > 0) {
+      const sameFile = ambig.some(p => p.c === from.c);
+      const sameRank = ambig.some(p => p.r === from.r);
+      if (!sameFile) san += fromFile;
+      else if (!sameRank) san += (8 - from.r);
+      else san += fromFile + (8 - from.r);
+    }
+    if (isCapture) san += 'x';
+    san += toFile + toRank;
+  }
+  if (isMate) san += '#';
+  else if (isCheck) san += '+';
+  return san;
+}
+
+// ════════════════════════════════════════════════════════
+//  GAME STATE
+// ════════════════════════════════════════════════════════
+let state = {};
+
+function newGame() {
+  closeModal('gameover-modal');
+  const timeVal = parseInt(document.getElementById('time-select').value);
+  state = {
+    board: initBoard(),
+    turn: W,
+    enPassant: null,
+    castlingRights: { wK: true, wQ: true, bK: true, bQ: true },
+    selected: null,
+    legalMoves: [],
+    moveHistory: [],
+    captured: { w: [], b: [] },
+    flipped: false,
+    gameOver: false,
+    timers: { w: timeVal, b: timeVal },
+    timerEnabled: timeVal > 0,
+    timerInterval: null,
+    lastMove: null,
+    halfmoveClock: 0,
+    positionHistory: [],
+  };
+  if (state.timerEnabled) startTimer();
+  renderAll();
+}
+
+function startTimer() {
+  if (state.timerInterval) clearInterval(state.timerInterval);
+  state.timerInterval = setInterval(() => {
+    if (state.gameOver) { clearInterval(state.timerInterval); return; }
+    state.timers[state.turn]--;
+    if (state.timers[state.turn] <= 0) {
+      state.timers[state.turn] = 0;
+      clearInterval(state.timerInterval);
+      state.gameOver = true;
+      renderTimers();
+      const winner = state.turn === W ? 'Black' : 'White';
+      showGameOver(`${winner} wins on time!`, `${state.turn === W ? 'White' : 'Black'} ran out of time.`, '⏱');
+    } else {
+      renderTimers();
+    }
+  }, 1000);
+}
+
+function flipBoard() {
+  state.flipped = !state.flipped;
+  renderAll();
+}
+
+function offerDraw() {
+  if (state.gameOver) return;
+  if (confirm('Offer draw? Both players agree to end the game as a draw.')) {
+    state.gameOver = true;
+    if (state.timerInterval) clearInterval(state.timerInterval);
+    showGameOver('Draw by agreement', 'Both players agreed to a draw.', '🤝');
+  }
+}
+
+function resignGame() {
+  if (state.gameOver) return;
+  const who = state.turn === W ? 'White' : 'Black';
+  if (confirm(`${who} resign? This will end the game.`)) {
+    state.gameOver = true;
+    if (state.timerInterval) clearInterval(state.timerInterval);
+    const winner = state.turn === W ? 'Black' : 'White';
+    showGameOver(`${winner} wins by resignation`, `${who} resigned.`, '🏳');
+  }
+}
+
+// ════════════════════════════════════════════════════════
+//  RENDER
+// ════════════════════════════════════════════════════════
+const FILES = 'abcdefgh';
+
+function renderAll() {
+  renderBoard();
+  renderTimers();
+  renderCaptured();
+  renderMoveHistory();
+  renderStatus();
+  renderPlayerCards();
+}
+
+function renderBoard() {
+  const boardEl = document.getElementById('board');
+  boardEl.innerHTML = '';
+  const { board, selected, legalMoves, lastMove, turn, flipped } = state;
+
+  const checkR = findKingInCheck(board, turn);
+
+  for (let vi = 0; vi < 8; vi++) {
+    for (let vj = 0; vj < 8; vj++) {
+      const r = flipped ? 7 - vi : vi;
+      const c = flipped ? 7 - vj : vj;
+
+      const sq = document.createElement('div');
+      sq.className = `square ${(r + c) % 2 === 0 ? 'light' : 'dark'}`;
+      sq.dataset.r = r;
+      sq.dataset.c = c;
+
+      // Highlights
+      if (lastMove && ((lastMove.from.r === r && lastMove.from.c === c) ||
+          (lastMove.to.r === r && lastMove.to.c === c))) {
+        sq.classList.add('last-move');
+      }
+      if (selected && selected.r === r && selected.c === c) sq.classList.add('selected');
+      if (checkR && checkR.r === r && checkR.c === c) sq.classList.add('in-check-sq');
+
+      // Coordinates
+      if (vj === 7) {
+        const rCoord = document.createElement('span');
+        rCoord.className = 'coord-rank';
+        rCoord.textContent = flipped ? vi + 1 : 8 - vi;
+        sq.appendChild(rCoord);
+      }
+      if (vi === 7) {
+        const fCoord = document.createElement('span');
+        fCoord.className = 'coord-file';
+        fCoord.textContent = FILES[c];
+        sq.appendChild(fCoord);
+      }
+
+      // Legal move indicators
+      const isLegal = legalMoves.some(m => m.r === r && m.c === c);
+      if (isLegal) {
+        if (board[r][c]) {
+          const ring = document.createElement('div');
+          ring.className = 'legal-cap-ring';
+          sq.appendChild(ring);
+        } else {
+          const dot = document.createElement('div');
+          dot.className = 'legal-dot';
+          sq.appendChild(dot);
+        }
+      }
+
+      // Piece
+      const piece = board[r][c];
+      if (piece) {
+        const pw = document.createElement('div');
+        pw.className = 'piece-wrap';
+        pw.innerHTML = PIECES_SVG[piece.color + piece.type] || '';
+        sq.appendChild(pw);
+      }
+
+      sq.addEventListener('click', () => handleSquareClick(r, c));
+      boardEl.appendChild(sq);
+    }
+  }
+}
+
+function findKingInCheck(board, color) {
+  if (!isInCheck(board, color)) return null;
+  for (let r = 0; r < 8; r++)
+    for (let c = 0; c < 8; c++)
+      if (board[r][c]?.color === color && board[r][c]?.type === 'K') return { r, c };
+  return null;
+}
+
+function renderTimers() {
+  const { timers, turn, timerEnabled, gameOver } = state;
+  ['w', 'b'].forEach(color => {
+    const el = document.getElementById('timer-' + (color === 'w' ? 'white' : 'black'));
+    if (!timerEnabled) { el.textContent = '∞'; el.className = 'timer'; return; }
+    const t = timers[color];
+    const m = Math.floor(t / 60).toString().padStart(2, '0');
+    const s = (t % 60).toString().padStart(2, '0');
+    el.textContent = `${m}:${s}`;
+    el.className = 'timer';
+    if (!gameOver && color === turn) el.classList.add(t <= 30 ? 'low' : 'active');
+  });
+}
+
+function renderCaptured() {
+  const vals = { P:1, N:3, B:3, R:5, Q:9, K:0 };
+  ['w','b'].forEach(color => {
+    const caps = state.captured[color];
+    const other = color === 'w' ? 'b' : 'w';
+    const otherCaps = state.captured[other];
+    const myScore = caps.reduce((a, p) => a + (vals[p] || 0), 0);
+    const oppScore = otherCaps.reduce((a, p) => a + (vals[p] || 0), 0);
+    const diff = myScore - oppScore;
+
+    const id = color === 'w' ? 'cap-white' : 'cap-black';
+    const scoreId = color === 'w' ? 'score-white' : 'score-black';
+    const el = document.getElementById(id);
+    el.innerHTML = '';
+    // Group by piece type
+    const counts = {};
+    caps.forEach(p => counts[p] = (counts[p] || 0) + 1);
+    const order = ['Q','R','B','N','P'];
+    order.forEach(type => {
+      if (counts[type]) {
+        for (let i = 0; i < counts[type]; i++) {
+          const div = document.createElement('div');
+          div.className = 'cap-piece';
+          div.innerHTML = PIECES_SVG[other + type] || '';
+          el.appendChild(div);
+        }
+      }
+    });
+    const scoreEl = document.getElementById(scoreId);
+    scoreEl.textContent = diff > 0 ? `+${diff}` : '';
+  });
+}
+
+function renderMoveHistory() {
+  const list = document.getElementById('move-list');
+  list.innerHTML = '';
+  const history = state.moveHistory;
+  for (let i = 0; i < history.length; i += 2) {
+    const row = document.createElement('div');
+    row.className = 'move-row';
+    const num = document.createElement('span');
+    num.className = 'move-num';
+    num.textContent = (i / 2 + 1) + '.';
+    row.appendChild(num);
+    const w = document.createElement('span');
+    w.className = 'move-san';
+    w.textContent = history[i];
+    row.appendChild(w);
+    if (history[i + 1]) {
+      const b = document.createElement('span');
+      b.className = 'move-san';
+      b.textContent = history[i + 1];
+      row.appendChild(b);
+    }
+    list.appendChild(row);
+  }
+  list.scrollTop = list.scrollHeight;
+}
+
+function renderStatus() {
+  const main = document.getElementById('status-main');
+  const sub  = document.getElementById('status-sub');
+  if (state.gameOver) return;
+  const inCheck = isInCheck(state.board, state.turn);
+  const turnName = state.turn === W ? 'White' : 'Black';
+  main.textContent = `${turnName}'s Turn`;
+  sub.textContent = inCheck ? '⚠ King in check!' : `Move ${Math.ceil((state.moveHistory.length + 1) / 2)}`;
+  sub.style.color = inCheck ? '#e94560' : '';
+}
+
+function renderPlayerCards() {
+  const wCard = document.getElementById('card-white');
+  const bCard = document.getElementById('card-black');
+  wCard.classList.toggle('active-turn', state.turn === W && !state.gameOver);
+  bCard.classList.toggle('active-turn', state.turn === B && !state.gameOver);
+  wCard.classList.toggle('in-check', isInCheck(state.board, W) && !state.gameOver);
+  bCard.classList.toggle('in-check', isInCheck(state.board, B) && !state.gameOver);
+}
+
+// ════════════════════════════════════════════════════════
+//  INTERACTION
+// ════════════════════════════════════════════════════════
+function handleSquareClick(r, c) {
+  if (state.gameOver) return;
+
+  const { board, turn, selected, legalMoves, enPassant, castlingRights } = state;
+  const piece = board[r][c];
+
+  // If we have a selection and clicking a legal destination
+  if (selected) {
+    const move = legalMoves.find(m => m.r === r && m.c === c);
+    if (move) {
+      executeMove(selected, move);
+      return;
+    }
+  }
+
+  // Select own piece
+  if (piece && piece.color === turn) {
+    if (selected && selected.r === r && selected.c === c) {
+      state.selected = null;
+      state.legalMoves = [];
+    } else {
+      state.selected = { r, c };
+      state.legalMoves = getLegalMoves(board, r, c, enPassant, castlingRights);
+    }
+    renderBoard();
+    return;
+  }
+
+  // Deselect
+  state.selected = null;
+  state.legalMoves = [];
+  renderBoard();
+}
+
+function executeMove(from, to, promoChoice) {
+  const { board, turn, enPassant, castlingRights } = state;
+  const piece = board[from.r][from.c];
+  const isPromotion = piece.type === 'P' &&
+    ((turn === W && to.r === 0) || (turn === B && to.r === 7));
+
+  if (isPromotion && !promoChoice) {
+    showPromoModal(turn, (choice) => executeMove(from, to, choice));
+    return;
+  }
+
+  const promo = promoChoice || null;
+  const captured = board[to.r][to.c];
+  const newBoard = applyMove(board, from, to, promo);
+  const newEnPassant = to.twoStep ? { r: from.r + (turn === W ? -1 : 1), c: from.c } : null;
+  const newCR = updateCastlingRights(castlingRights, board, from, piece, captured);
+
+  // Record captured piece
+  if (captured) state.captured[turn].push(captured.type);
+  if (to.enPassant) state.captured[turn].push('P');
+
+  const opponent = turn === W ? B : W;
+  const isCheck = isInCheck(newBoard, opponent);
+  const allOpponentMoves = getAllLegalMoves(newBoard, opponent, newEnPassant, newCR);
+  const isMate = allOpponentMoves.length === 0;
+
+  const san = toAlgebraic(board, from, to, promo, isCheck, isMate, castlingRights, enPassant);
+  state.moveHistory.push(san);
+
+  state.board = newBoard;
+  state.turn = opponent;
+  state.enPassant = newEnPassant;
+  state.castlingRights = newCR;
+  state.selected = null;
+  state.legalMoves = [];
+  state.lastMove = { from, to };
+
+  renderAll();
+
+  if (isMate) {
+    state.gameOver = true;
+    if (state.timerInterval) clearInterval(state.timerInterval);
+    const winner = turn === W ? 'White' : 'Black';
+    setTimeout(() => showGameOver(
+      `${winner} wins by checkmate!`,
+      `${opponent === W ? 'White' : 'Black'} king is checkmated.`,
+      winner === 'White' ? '♔' : '♚'
+    ), 200);
+  } else if (isCheck) {
+    // Flash check indicator (already handled in renderAll)
+  } else if (allOpponentMoves.length === 0) {
+    // Stalemate
+    state.gameOver = true;
+    if (state.timerInterval) clearInterval(state.timerInterval);
+    setTimeout(() => showGameOver('Draw by Stalemate', `${opponent === W ? 'White' : 'Black'} has no legal moves.`, '🤝'), 200);
+  }
+}
+
+// ════════════════════════════════════════════════════════
+//  PROMOTION MODAL
+// ════════════════════════════════════════════════════════
+let promoCallback = null;
+
+function showPromoModal(color, callback) {
+  promoCallback = callback;
+  const choices = document.getElementById('promo-choices');
+  choices.innerHTML = '';
+  ['Q','R','B','N'].forEach(type => {
+    const btn = document.createElement('div');
+    btn.className = 'promo-btn';
+    btn.innerHTML = PIECES_SVG[color + type] || '';
+    btn.title = { Q:'Queen', R:'Rook', B:'Bishop', N:'Knight' }[type];
+    btn.addEventListener('click', () => {
+      closeModal('promo-modal');
+      if (promoCallback) promoCallback(type);
+      promoCallback = null;
+    });
+    choices.appendChild(btn);
+  });
+  openModal('promo-modal');
+}
+
+// ════════════════════════════════════════════════════════
+//  GAME OVER MODAL
+// ════════════════════════════════════════════════════════
+function showGameOver(title, desc, icon) {
+  document.getElementById('result-icon').textContent = icon;
+  document.getElementById('result-title').textContent = title;
+  document.getElementById('result-desc').textContent = desc;
+  renderStatus();
+  document.getElementById('status-main').textContent = title;
+  document.getElementById('status-sub').textContent = desc;
+  openModal('gameover-modal');
+}
+
+function openModal(id)  { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+// ════════════════════════════════════════════════════════
+//  BOOT
+// ════════════════════════════════════════════════════════
+newGame();
+</script>
+</body>
+</html>
